@@ -664,9 +664,12 @@ function vendorCard(sale, forceOpen){
     : '';
 
   const catTags = (sale.categories && sale.categories.length)
-    ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">${sale.categories.map(c=>
-        `<span style="font-size:0.7rem;font-weight:600;color:var(--turquoise);background:#EAF1E8;padding:2px 9px;border-radius:999px;">${c}</span>`
-      ).join('')}</div>`
+    ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+        <span style="font-size:0.7rem;color:var(--ink-soft);">Selling:</span>
+        ${sale.categories.map(c=>
+          `<span style="font-size:0.7rem;font-weight:600;color:var(--turquoise);background:#EAF1E8;padding:2px 9px;border-radius:999px;">${c}</span>`
+        ).join('')}
+      </div>`
     : '';
 
   return `
@@ -675,8 +678,8 @@ function vendorCard(sale, forceOpen){
         <div>
           <p class="vendor-name">${sale.vendor}</p>
           ${basedInLine}
-          <p class="vendor-sub"><b>${sale.time}</b></p>
-          <p class="vendor-sub" style="margin-top:2px;">${sale.location}</p>
+          <p class="vendor-sub"><span style="color:var(--ink-soft);">Sale time: </span><b>${sale.time}</b></p>
+          <p class="vendor-sub" style="margin-top:2px;"><span style="color:var(--ink-soft);">Selling at or from: </span>${sale.location}</p>
           ${openToTags ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;"><span style="font-size:0.7rem;color:var(--ink-soft);align-self:center;">Open to:</span>${openToTags}</div>` : ''}
           ${catTags}
         </div>
