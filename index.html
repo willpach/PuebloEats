@@ -180,6 +180,22 @@
     font-weight:600;
   }
 
+  /* FEATURED SALE */
+  .featured-wrap{margin-bottom:18px;}
+  .featured-label{
+    font-size:0.75rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--clay);
+    margin:0 0 8px;
+  }
+  .featured-card{
+    background:linear-gradient(135deg, var(--clay-soft) 0%, var(--card) 65%);
+    border:2px solid var(--clay);
+  }
+  .featured-card .vendor-name{color:var(--clay);}
+
   /* WEEK VIEW */
   .week-grid{
     display:grid;
@@ -331,6 +347,7 @@
   </div>
 
   <div class="view active" id="view-month">
+    <div id="featuredSale"></div>
     <div class="month-grid" id="monthGrid"></div>
   </div>
 
@@ -622,7 +639,7 @@ function fulfillmentChip(f){
   return '<span class="chip both">Pickup or delivery</span>';
 }
 
-function vendorCard(sale, forceOpen){
+function vendorCard(sale, forceOpen, extraClass){
   const menu = sale.items.map(i => {
     const m = i.match(/^(.*?)(\$\d+(\.\d+)?)$/);
     if(m) return `<li><span>${m[1].trim()}</span><span>${m[2]}</span></li>`;
@@ -673,7 +690,7 @@ function vendorCard(sale, forceOpen){
     : '';
 
   return `
-    <div class="vendor-card${forceOpen ? ' open' : ''}">
+    <div class="vendor-card${extraClass ? ' '+extraClass : ''}${forceOpen ? ' open' : ''}">
       <div class="vendor-card-top">
         <div>
           <p class="vendor-name">${sale.vendor}</p>
@@ -710,7 +727,40 @@ function attachCardToggles(root){
   });
 }
 
+function renderFeaturedSale(){
+  const wrap = $('#featuredSale');
+  if(!wrap) return;
+
+  const weekStart = startOfWeek(today);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+6);
+  const todayKey = fmtKey(today);
+  const weekEndKey = fmtKey(weekEnd);
+
+  // Soonest upcoming sale that falls within the current week (today → Saturday).
+  const upcomingThisWeek = SALES
+    .filter(s => s.date >= todayKey && s.date <= weekEndKey)
+    .sort((a,b) => a.date.localeCompare(b.date) || a.vendor.localeCompare(b.vendor));
+
+  if(!upcomingThisWeek.length){
+    wrap.innerHTML = '';
+    return;
+  }
+
+  const featured = upcomingThisWeek[0];
+  const dateObj = new Date(featured.date + 'T00:00:00');
+  const isToday = featured.date === todayKey;
+  const whenLabel = isToday ? 'Today' : `${dowShort[dateObj.getDay()]}, ${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
+
+  wrap.innerHTML = `
+    <div class="featured-wrap">
+      <p class="featured-label">★ This Week's Featured Sale — ${whenLabel}</p>
+      ${vendorCard(featured, false, 'featured-card')}
+    </div>`;
+  attachCardToggles(wrap);
+}
+
 function renderMonth(){
+  renderFeaturedSale();
   const y = cursor.getFullYear(), m = cursor.getMonth();
   $('#periodLabel').textContent = `${monthNames[m]} ${y}`;
   const grid = $('#monthGrid');
