@@ -290,16 +290,12 @@
 </style>
 </head>
 <body>
-<div style="background:#8A2E22;color:#fff;text-align:center;padding:10px 16px;font-size:0.85rem;font-weight:700;">
-  🚧 TEST VERSION — this is an independent community project, not an official Kewa Pueblo site.
-  Feedback? Email <a href="mailto:KewaEats@gmail.com" style="color:#fff;text-decoration:underline;">KewaEats@gmail.com</a>
-</div>
 <div class="wrap">
   <header>
     <h1>Pueblo <span>Eats</span></h1>
     <div style="text-align:left;">
       <p class="tagline">What's there to eat?! Click a day to see!</p>
-      <a href="https://docs.google.com/forms/d/e/1FAIpQLScSIS5omgi5sJJmq8Kj_ojDXfQXCbb_WqK2DO1wBHWVuCFTlQ/viewform" target="_blank" rel="noopener"
+      <a href="https://forms.gle/rjuh9FAVqehJXCvk7" target="_blank" rel="noopener"
          style="display:inline-block;margin-top:6px;font-size:0.85rem;font-weight:700;color:#fff;background:var(--clay);padding:7px 16px;border-radius:999px;text-decoration:none;">
         Post your food sale →
       </a>
@@ -355,7 +351,7 @@
 /* ---------- LIVE DATA SOURCE ---------- */
 /* Published Google Sheet (CSV). Replace this URL with your own
    Form's "Publish to web" CSV link if it ever changes. */
-const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1QILYiDDMPvmwjFNLCsFhy5nlqVCBXX8pP0C8hvnBaCJp86C5CUH6iAIRd7l7cpggH-TPdBEiB_Uu/pub?gid=1350305170&single=true&output=csv";
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4_0mu-yOrsPJgBDRm1VWApdorxUFEj2OKhvL1kK6_4GP-_s8JIFolli1tkZo6oo0ez-PygVtPqQTU/pub?gid=1572425320&single=true&output=csv";
 
 // Fallback sample data, used only if the live fetch fails (e.g. offline preview)
 // TEMP: using your real BobaStuff test submission here to verify parsing logic
@@ -435,33 +431,46 @@ function meaningfulText(raw){
 function rowToSale(row){
   const dateKey = parseFormDate(row['When is your food sale?'] || '');
   if(!dateKey) return null; // skip malformed/incomplete rows
-  const itemsRaw = row['What is your menu?'] || '';
+  const itemsRaw = row['What are you going to sell?'] || row['What is your menu?'] || '';
   const items = itemsRaw.split('\n').map(s=>s.trim()).filter(Boolean);
   const contactAnswer = (row['Can we post your contact info on the site?'] || '').trim().toLowerCase();
-  const categoriesRaw = row['Categories (check all that apply)'] || '';
+  const categoriesRaw = row['Help buyers find specific kinds of foods. Check all that apply to your food sale.'] || row['Categories (check all that apply)'] || '';
   const allCategories = categoriesRaw.split(',').map(c=>c.trim()).filter(Boolean);
   const preorderCategoryChecked = allCategories.some(c => c.toLowerCase() === 'pre-order' || c.toLowerCase() === 'preorder');
   const categories = allCategories.filter(c => c.toLowerCase() !== 'pre-order' && c.toLowerCase() !== 'preorder');
 
-  // Recurring: Yes/No question with a branched follow-up shown only if Yes
+  // Recurring: Yes/No question with a branched follow-up shown only if Yes.
+  // (Not currently on the live form — these will just come back empty/false,
+  // which is harmless if the question isn't asked.)
   const recurringAnswer = (row['Is this a recurring food sale?'] || '').trim().toLowerCase();
   const isRecurring = recurringAnswer.startsWith('yes');
   const recurringDetails = meaningfulText(row['Tell us when you usually have your food sale:'] || '');
 
-  // Pre-orders: Yes/No question with a branched follow-up shown only if Yes,
-  // OR the "Pre-order" Categories checkbox — either signals pre-order status.
-  const preorderAnswer = (row['Taking pre-orders? (optional)'] || '').trim().toLowerCase();
+  // Pre-orders: simple Yes/No question, OR the "Pre-order" Categories
+  // checkbox — either signals pre-order status. No separate deadline-detail
+  // field on the current form, so preorderDetails falls back to a generic note.
+  const preorderAnswer = (row['Can buyers place pre-orders?'] || row['Taking pre-orders? (optional)'] || '').trim().toLowerCase();
   const preorderAnswerYes = preorderAnswer.startsWith('yes');
   const isPreorder = preorderAnswerYes || preorderCategoryChecked;
   const preorderDetails = meaningfulText(row['Tell us about your Pre-order requirements:'] || '');
 
-  // General catch-all for misc notes (allergy info, etc). Checks both with
-  // and without a trailing "?" since the form's exact title has varied.
-  const notes = meaningfulText(row['Anything else buyers should know (optional)'] || row['Anything else buyers should know? (optional)'] || '');
+  // General catch-all for misc notes (allergy info, etc). Checks several
+  // title variants since the form's exact wording has changed a few times.
+  const notes = meaningfulText(
+    row['Any additional details you want to share with potential buyers?']
+    || row['Any additional detail you want to share with potential buyers?']
+    || row['Anything else buyers should know (optional)']
+    || row['Anything else buyers should know? (optional)']
+    || ''
+  );
 
   const basedIn = (row['Where are you based?'] || '').trim();
   const openToRaw = row['Which communities/villages is sale open to?'] || '';
   const openTo = openToRaw.split(',').map(v=>v.trim()).filter(Boolean);
+
+  const locationType = (row['Where can buyers find you?'] || '').trim();
+  const locationDetails = (row['Add home address if selling from home.'] || row['Location details (optional)'] || '').trim();
+  const location = locationDetails ? `${locationType} — ${locationDetails}` : locationType;
 
   return {
     vendor: (row['Vendor/Business Name']||'Unnamed vendor').trim(),
@@ -471,7 +480,7 @@ function rowToSale(row){
     date: dateKey,
     time: (row['What time is your food sale?']||'').trim(),
     fulfillment: fulfillmentFromAnswer(row['Pickup only, delivery only, or both?']),
-    location: (row['Where will you be located?']||'').trim(),
+    location: location,
     payment: (row['How can people pay? (mark all that apply)']||'').trim(),
     contactPublic: contactAnswer.startsWith('yes'),
     contact: (row['Contact info and preferences']||'').trim(),
