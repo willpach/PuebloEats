@@ -239,6 +239,7 @@ nav.views button.active{
   padding:16px 18px;
   cursor:pointer;
 }
+.vendor-card.sold-out{opacity:0.55;}
 .vendor-card-top{
   display:flex;
   justify-content:space-between;
@@ -297,18 +298,6 @@ nav.views button.active{
   font-style:italic;
   font-size:0.85rem;
 }
-.contact-link{
-  display:inline-block;
-  font-size:0.78rem;
-  font-weight:700;
-  color:var(--turquoise);
-  background:#E4EDE9;
-  padding:2px 9px;
-  border-radius:999px;
-  text-decoration:none;
-  margin-left:4px;
-  white-space:nowrap;
-}
 .view{display:none;}
 .view.active{display:block;}
 </style>
@@ -358,12 +347,15 @@ Prefer not to use the form? Email your sale details to <a href="mailto:KewaEats@
 <div id="featuredSale"></div>
 <div class="month-grid" id="monthGrid"></div>
 </div>
+
 <div class="view" id="view-week">
 <div class="week-grid" id="weekGrid"></div>
 </div>
+
 <div class="view" id="view-day">
 <div class="listings" id="dayListings"></div>
 </div>
+
 <div class="view" id="view-list">
 <div class="listings" id="listListings"></div>
 </div>
@@ -486,19 +478,28 @@ function meaningfulText(raw){
   return v;
 }
 
-// Finds a US phone number inside the free-text contact field and adds
-// tappable Call/Text links next to it, so buyers on mobile can reach the
-// vendor with one tap. Leaves emails, Facebook handles, notes, etc. untouched.
-function linkifyContact(raw){
-  if(!raw) return raw;
-  const phoneRe = /(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
-  return raw.replace(phoneRe, (match) => {
-    const digits = match.replace(/\D/g,'');
-    const tenDigit = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
-    if(tenDigit.length !== 10) return match; // not a real phone number, leave as-is
-    const tel = `+1${tenDigit}`;
-    return `${match} <a href="tel:${tel}" class="contact-link">📞 Call</a> <a href="sms:${tel}" class="contact-link">💬 Text</a>`;
+// Parses a spreadsheet Timestamp cell into milliseconds for comparison.
+// Returns 0 (earliest possible) if it can't be parsed, so a bad/missing
+// timestamp never wins a dedup tie-break it shouldn't.
+function parseTimestampMs(raw){
+  const t = new Date(raw);
+  return isNaN(t.getTime()) ? 0 : t.getTime();
+}
+
+// A vendor sharing a sales update (sold out, cancelled, rescheduled, etc.)
+// does so by resubmitting the form, which creates a second row for the
+// same sale rather than editing the original in place. This keeps only
+// the most recently submitted row per vendor+date, so the update wins.
+function dedupeByLatestSubmission(sales){
+  const latest = new Map();
+  sales.forEach(s => {
+    const key = `${s.vendor.trim().toLowerCase()}|${s.date}`;
+    const existing = latest.get(key);
+    if(!existing || parseTimestampMs(s.timestamp) >= parseTimestampMs(existing.timestamp)){
+      latest.set(key, s);
+    }
   });
+  return Array.from(latest.values());
 }
 
 function rowToSale(row){
@@ -540,7 +541,19 @@ function rowToSale(row){
     || ''
   );
 
+  // Sales Update: a free-text field vendors can fill in (via a fresh form
+  // submission) to say a sale sold out, got cancelled, was rescheduled,
+  // running low, moved times, etc. We keyword-match for "sold out" /
+  // "cancel" to drive the badge + muted styling, but always show the
+  // vendor's own wording too so nuance ("sold out of X, still have Y")
+  // isn't lost.
+  const saleUpdate = meaningfulText(row['Sales Update: (only if applicable)'] || '');
+  const updateLower = saleUpdate.toLowerCase();
+  const isSoldOut = /sold\s*out/.test(updateLower);
+  const isCancelled = /cancel/.test(updateLower);
+
   const basedIn = (row['Where are you based?'] || '').trim();
+
   const openToRaw = row['Which communities/villages is sale open to?'] || '';
   const openTo = openToRaw.split(',').map(v=>v.trim()).filter(Boolean);
 
@@ -550,6 +563,7 @@ function rowToSale(row){
 
   return {
     vendor: (row['Vendor/Business Name']||'Unnamed vendor').trim(),
+    timestamp: (row['Timestamp']||'').trim(),
     basedIn: basedIn,
     openTo: openTo,
     items: items.length ? items : ['Menu not listed'],
@@ -566,7 +580,10 @@ function rowToSale(row){
     recurringDetails: recurringDetails,
     preorderDetails: preorderDetails,
     categories: categories,
-    isPreorder: isPreorder
+    isPreorder: isPreorder,
+    saleUpdate: saleUpdate,
+    isSoldOut: isSoldOut,
+    isCancelled: isCancelled
   };
 }
 
@@ -577,7 +594,7 @@ function loadData(){
     skipEmptyLines: true,
     complete: function(results){
       const parsed = results.data.map(rowToSale).filter(Boolean);
-      SALES = parsed.length ? parsed : FALLBACK_SALES;
+      SALES = parsed.length ? dedupeByLatestSubmission(parsed) : FALLBACK_SALES;
       rebuildIndexAndRender('live');
     },
     error: function(){
@@ -679,6 +696,7 @@ function rebuildIndexAndRender(status){
 
 const today = new Date();
 today.setHours(0,0,0,0);
+
 let currentView = 'month';
 let cursor = new Date(today); // drives whichever view is active
 let selectedDay = new Date(today);
@@ -687,6 +705,7 @@ const monthNames = ["January","February","March","April","May","June","July","Au
 const dowShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 /* ---------- rendering ---------- */
+
 function fulfillmentChip(f){
   if(f === 'pickup') return '<span class="chip pickup">Pickup</span>';
   if(f === 'delivery') return '<span class="chip delivery">Delivery</span>';
@@ -701,7 +720,7 @@ function vendorCard(sale, forceOpen, extraClass){
   }).join('');
 
   const contactBlock = sale.contactPublic
-    ? `<div class="detail-row"><span class="detail-label">Contact</span>${linkifyContact(sale.contact)}</div>`
+    ? `<div class="detail-row"><span class="detail-label">Contact</span>${sale.contact}</div>`
     : `<div class="detail-row"><span class="detail-label">Contact</span><span class="contact-note">Kept private by vendor — check back or look for their posted flyer.</span></div>`;
 
   const notesBlock = sale.notes
@@ -724,6 +743,21 @@ function vendorCard(sale, forceOpen, extraClass){
     ? `<span class="chip" style="background:#E4EDE9;color:var(--turquoise);">Recurring</span>`
     : '';
 
+  // Sales-update badge: sold out / cancelled get a strong dark badge (and
+  // mute the whole card, below); any other update gets a lighter "Update"
+  // badge so buyers know to check the details before heading over.
+  const updateBadge = sale.isSoldOut
+    ? `<span class="chip" style="background:#3A3A34;color:#fff;">Sold Out</span>`
+    : sale.isCancelled
+    ? `<span class="chip" style="background:#3A3A34;color:#fff;">Cancelled</span>`
+    : sale.saleUpdate
+    ? `<span class="chip" style="background:#F5E7C4;color:#8A6A1E;">Update</span>`
+    : '';
+
+  const updateBlock = sale.saleUpdate
+    ? `<div class="detail-row"><span class="detail-label">Latest update</span>${sale.saleUpdate}</div>`
+    : '';
+
   const basedInLine = sale.basedIn
     ? `<p class="vendor-sub" style="margin-top:2px;">Based in ${sale.basedIn}</p>`
     : '';
@@ -736,15 +770,17 @@ function vendorCard(sale, forceOpen, extraClass){
 
   const catTags = (sale.categories && sale.categories.length)
     ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-         <span style="font-size:0.7rem;color:var(--ink-soft);">Selling:</span>
-         ${sale.categories.map(c=>
-           `<span style="font-size:0.7rem;font-weight:600;color:var(--turquoise);background:#EAF1E8;padding:2px 9px;border-radius:999px;">${c}</span>`
-         ).join('')}
-       </div>`
+        <span style="font-size:0.7rem;color:var(--ink-soft);">Selling:</span>
+        ${sale.categories.map(c=>
+          `<span style="font-size:0.7rem;font-weight:600;color:var(--turquoise);background:#EAF1E8;padding:2px 9px;border-radius:999px;">${c}</span>`
+        ).join('')}
+      </div>`
     : '';
 
+  const soldOutOrCancelled = sale.isSoldOut || sale.isCancelled;
+
   return `
-    <div class="vendor-card${extraClass ? ' '+extraClass : ''}${forceOpen ? ' open' : ''}">
+    <div class="vendor-card${extraClass ? ' '+extraClass : ''}${forceOpen ? ' open' : ''}${soldOutOrCancelled ? ' sold-out' : ''}">
       <div class="vendor-card-top">
         <div>
           <p class="vendor-name">${sale.vendor}</p>
@@ -756,11 +792,13 @@ function vendorCard(sale, forceOpen, extraClass){
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
           ${fulfillmentChip(sale.fulfillment)}
+          ${updateBadge}
           ${preorderBadge}
           ${recurringBadge}
         </div>
       </div>
       <div class="vendor-details">
+        ${updateBlock}
         <div class="detail-row">
           <span class="detail-label">Menu</span>
           <ul class="menu-list">${menu}</ul>
@@ -784,14 +822,16 @@ function attachCardToggles(root){
 function renderFeaturedSale(){
   const wrap = $('#featuredSale');
   if(!wrap) return;
+
   const weekStart = startOfWeek(today);
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+6);
   const todayKey = fmtKey(today);
   const weekEndKey = fmtKey(weekEnd);
 
   // Soonest upcoming sale that falls within the current week (today → Saturday).
+  // Sold-out and cancelled sales are skipped — no point featuring one.
   const upcomingThisWeek = SALES
-    .filter(s => s.date >= todayKey && s.date <= weekEndKey)
+    .filter(s => s.date >= todayKey && s.date <= weekEndKey && !s.isSoldOut && !s.isCancelled)
     .sort((a,b) => a.date.localeCompare(b.date) || a.vendor.localeCompare(b.vendor));
 
   if(!upcomingThisWeek.length){
@@ -818,6 +858,7 @@ function renderMonth(){
   $('#periodLabel').textContent = `${monthNames[m]} ${y}`;
   const grid = $('#monthGrid');
   grid.innerHTML = dowShort.map(d=>`<div class="dow">${d}</div>`).join('');
+
   const firstDay = new Date(y, m, 1);
   const startOffset = firstDay.getDay();
   const daysInMonth = new Date(y, m+1, 0).getDate();
@@ -825,6 +866,7 @@ function renderMonth(){
   for(let i=0;i<startOffset;i++){
     grid.innerHTML += `<div class="day-cell empty"></div>`;
   }
+
   for(let d=1; d<=daysInMonth; d++){
     const dateObj = new Date(y,m,d);
     const key = fmtKey(dateObj);
@@ -839,6 +881,7 @@ function renderMonth(){
         ${count ? `<span class="badge">${count}</span>` : ''}
       </div>`;
   }
+
   grid.querySelectorAll('.day-cell[data-date]').forEach(cell=>{
     cell.addEventListener('click', ()=>{
       selectedDay = new Date(cell.dataset.date + 'T00:00:00');
@@ -858,8 +901,10 @@ function renderWeek(){
   const start = startOfWeek(cursor);
   const end = new Date(start); end.setDate(end.getDate()+6);
   $('#periodLabel').textContent = `${monthNames[start.getMonth()]} ${start.getDate()} – ${monthNames[end.getMonth()]} ${end.getDate()}`;
+
   const grid = $('#weekGrid');
   grid.innerHTML = '';
+
   for(let i=0;i<7;i++){
     const d = new Date(start); d.setDate(start.getDate()+i);
     const key = fmtKey(d);
@@ -870,12 +915,14 @@ function renderWeek(){
         <span class="mini-name">${s.vendor}</span>
         ${s.items[0]}${s.items.length>1?' +more':''}
       </div>`).join('');
+
     grid.innerHTML += `
       <div class="week-col${isToday?' today':''}">
         <div class="week-col-head">${dowShort[i]}<br><span class="num">${d.getDate()}</span></div>
         ${cards || ''}
       </div>`;
   }
+
   grid.querySelectorAll('.mini-card').forEach(card=>{
     card.addEventListener('click', ()=>{
       selectedDay = new Date(card.dataset.date + 'T00:00:00');
@@ -889,6 +936,7 @@ function renderDay(){
   const key = fmtKey(selectedDay);
   const isToday = key === fmtKey(today);
   $('#periodLabel').textContent = `${dowShort[selectedDay.getDay()]}, ${monthNames[selectedDay.getMonth()]} ${selectedDay.getDate()}${isToday ? ' · Today' : ''}`;
+
   const daySales = salesByDate[key] || [];
   const feasts = feastsForDate(selectedDay);
   const container = $('#dayListings');
@@ -901,6 +949,7 @@ function renderDay(){
     container.innerHTML = `${feastBanner}<div class="empty-state">No food sales posted for this day yet.</div>`;
     return;
   }
+
   container.innerHTML = feastBanner + daySales.map(s=>vendorCard(s,false)).join('');
   attachCardToggles(container);
 }
@@ -911,6 +960,7 @@ function renderList(){
     .sort();
 
   const container = $('#listListings');
+
   if(!upcomingKeys.length){
     container.innerHTML = `<div class="empty-state">No upcoming food sales posted yet.</div>`;
     return;
@@ -932,6 +982,7 @@ function renderList(){
         <div style="display:flex;flex-direction:column;gap:10px;">${cards}</div>
       </div>`;
   }).join('');
+
   attachCardToggles(container);
 }
 
@@ -962,12 +1013,14 @@ $('#prevBtn').addEventListener('click', ()=>{
   if(currentView==='day'){ selectedDay.setDate(selectedDay.getDate()-1); cursor = new Date(selectedDay); }
   render();
 });
+
 $('#nextBtn').addEventListener('click', ()=>{
   if(currentView==='month') cursor.setMonth(cursor.getMonth()+1);
   if(currentView==='week') cursor.setDate(cursor.getDate()+7);
   if(currentView==='day'){ selectedDay.setDate(selectedDay.getDate()+1); cursor = new Date(selectedDay); }
   render();
 });
+
 $('#todayBtn').addEventListener('click', ()=>{
   cursor = new Date(today);
   selectedDay = new Date(today);
