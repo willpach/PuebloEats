@@ -492,6 +492,26 @@ function meaningfulText(raw){
   return v;
 }
 
+// Fallback category guesser, used ONLY when a vendor didn't check any
+// category boxes on the form — most often because the listing was
+// transcribed from a Facebook post rather than submitted directly.
+// A vendor's own checkbox choices always take priority over this; it's
+// a rough helper for manual entries, not a replacement for real tagging.
+// Order matters a little (first match per keyword wins), but a menu can
+// still match several categories at once (e.g. burritos + horchata).
+const CATEGORY_KEYWORDS = [
+  [/burrito|bacon|egg|pancake|waffle|breakfast/, 'Breakfast'],
+  [/tea|boba|coffee|juice|soda|lemonade|horchata|atole|\bdrink/, 'Drinks'],
+  [/cake|cookie|pie|pastry|dessert|sweet|churro|empanada|bizcochito/, 'Desserts'],
+  [/chip|snack|chicharr[oó]n|popcorn/, 'Snacks'],
+  [/frybread|fry bread|posole|pozole|stew|chile|tamale|enchilada|plate|lunch|dinner/, 'Lunch']
+];
+
+function guessCategoriesFromItems(items){
+  const text = items.join(' ').toLowerCase();
+  return CATEGORY_KEYWORDS.filter(([re]) => re.test(text)).map(([,cat]) => cat);
+}
+
 // Parses a spreadsheet Timestamp cell into milliseconds for comparison.
 // Returns 0 (earliest possible) if it can't be parsed, so a bad/missing
 // timestamp never wins a dedup tie-break it shouldn't.
@@ -528,7 +548,19 @@ function rowToSale(row){
   const categoriesRaw = row['Help buyers find specific kinds of foods. Check all that apply to your food sale.'] || row['Categories (check all that apply)'] || '';
   const allCategories = categoriesRaw.split(',').map(c=>c.trim()).filter(Boolean);
   const preorderCategoryChecked = allCategories.some(c => c.toLowerCase() === 'pre-order' || c.toLowerCase() === 'preorder');
-  const categories = allCategories.filter(c => c.toLowerCase() !== 'pre-order' && c.toLowerCase() !== 'preorder');
+  const checkedCategories = allCategories.filter(c => c.toLowerCase() !== 'pre-order' && c.toLowerCase() !== 'preorder');
+
+  // Always run the keyword guesser against the menu and merge its results
+  // in alongside whatever categories were checked/entered — this way a
+  // vendor's own tags never get lost, but a menu mentioning "burrito"
+  // still surfaces under Breakfast even if only "Snacks" got checked.
+  // Case-insensitive de-dup so a manually-entered "breakfast" and a
+  // guessed "Breakfast" don't both show up as separate chips.
+  const guessedCategories = guessCategoriesFromItems(items);
+  const seenCategories = new Set(checkedCategories.map(c => c.toLowerCase()));
+  const categories = checkedCategories.concat(
+    guessedCategories.filter(c => !seenCategories.has(c.toLowerCase()))
+  );
 
   // Recurring: Yes/No question with a branched follow-up shown only if Yes.
   // (Not currently on the live form — these will just come back empty/false,
