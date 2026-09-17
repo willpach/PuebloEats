@@ -617,20 +617,28 @@ function rowToSale(row){
   // Sales Update: a free-text field vendors can fill in (via a fresh form
   // submission) to say a sale sold out, got cancelled, wrapped up for the
   // day, was rescheduled, running low, moved times, etc. We keyword-match
-  // three end states to drive the badge + muted styling, but always show
+  // four end states to drive the badge + muted styling, but always show
   // the vendor's own wording too so nuance ("sold out of X, still have Y")
-  // isn't lost:
+  // isn't lost. Each is checked only when none of the earlier ones matched,
+  // so e.g. "sold out and done for the day" still reads as just Sold Out:
   //   - sold out: ran out of food, demand outpaced supply
   //   - cancelled: the sale didn't happen at all
+  //   - rescheduled: not happening on this listed date, but coming back on
+  //     another (the new date is its own separate form submission/row)
   //   - finished: a normal end to selling for the day — food may still be
   //     left over, they just aren't selling anymore (closed up, done for
-  //     the day, etc). Checked only when neither of the above matched, so
-  //     "sold out and done for the day" still reads as Sold Out.
+  //     the day, etc)
+  // isInactive is true for all four — the one flag everything else (badge
+  // counts, list ordering, card muting) should key off of, so adding a new
+  // "not actually selling anymore" keyword later only means touching the
+  // regexes below, not every place that reads these flags.
   const saleUpdate = meaningfulText(row['Sales Update: (only if applicable)'] || '');
   const updateLower = saleUpdate.toLowerCase();
   const isSoldOut = /sold\s*out/.test(updateLower);
-  const isCancelled = /cancel/.test(updateLower);
-  const isFinished = !isSoldOut && !isCancelled && /\b(done( selling| for (the day|today))?|finished( selling)?|closed( up)?( for (the day|today))?|wrapped up|no longer selling|not selling (today|anymore)|sale(?:'s| is)? (over|ended))\b/.test(updateLower);
+  const isCancelled = !isSoldOut && /cancel/.test(updateLower);
+  const isRescheduled = !isSoldOut && !isCancelled && /reschedul|postpone|moved to (a |another )?(different|new)?\s*(day|date|time)|push(ed)? (to|back)|new (date|day|time)/.test(updateLower);
+  const isFinished = !isSoldOut && !isCancelled && !isRescheduled && /\b(done( selling| for (the day|today))?|finished( selling)?|closed( up)?( for (the day|today))?|wrapped up|no longer selling|not selling (today|anymore)|sale(?:'s| is)? (over|ended))\b/.test(updateLower);
+  const isInactive = isSoldOut || isCancelled || isRescheduled || isFinished;
 
   const basedIn = (row['Where are you based?'] || '').trim();
 
@@ -664,7 +672,9 @@ function rowToSale(row){
     saleUpdate: saleUpdate,
     isSoldOut: isSoldOut,
     isCancelled: isCancelled,
-    isFinished: isFinished
+    isFinished: isFinished,
+    isRescheduled: isRescheduled,
+    isInactive: isInactive
   };
 }
 
@@ -758,7 +768,11 @@ function reindexAndRender(){
   salesByDate = {};
   getFilteredSales().forEach(s => { (salesByDate[s.date] = salesByDate[s.date] || []).push(s); });
   Object.keys(salesByDate).forEach(key => {
-    salesByDate[key].sort((a,b) => a.sortMinutes - b.sortMinutes);
+    // Active sales first (by sale time), inactive ones (sold out,
+    // cancelled, rescheduled, finished) pushed to the bottom regardless of
+    // their time — a buyer scanning the day shouldn't have to skip past
+    // sales that are no longer happening to find the ones that are.
+    salesByDate[key].sort((a,b) => (a.isInactive - b.isInactive) || (a.sortMinutes - b.sortMinutes));
   });
   renderFilterBar();
   renderVillageFilterBar();
@@ -825,15 +839,18 @@ function vendorCard(sale, forceOpen, extraClass){
     : '';
 
   // Sales-update badge: sold out / cancelled get a strong dark badge (and
-  // mute the whole card, below). Finished gets a softer grey badge — same
-  // muted card, but "Done Selling" reads as a normal end to the day rather
-  // than "we ran out" or "it never happened". Any other update gets a
-  // lighter "Update" badge so buyers know to check the details before
-  // heading over.
+  // mute the whole card, below). Rescheduled gets an informational blue
+  // badge (not happening today, but not bad news either). Finished gets a
+  // softer grey badge — same muted card, but "Done Selling" reads as a
+  // normal end to the day rather than "we ran out" or "it never happened".
+  // Any other update gets a lighter "Update" badge so buyers know to check
+  // the details before heading over.
   const updateBadge = sale.isSoldOut
     ? `<span class="chip" style="background:#3A3A34;color:#fff;">Sold Out</span>`
     : sale.isCancelled
     ? `<span class="chip" style="background:#3A3A34;color:#fff;">Cancelled</span>`
+    : sale.isRescheduled
+    ? `<span class="chip" style="background:#D7E3EE;color:#2C5F8A;">Rescheduled</span>`
     : sale.isFinished
     ? `<span class="chip" style="background:#6B6B63;color:#fff;">Done Selling</span>`
     : sale.saleUpdate
@@ -863,10 +880,8 @@ function vendorCard(sale, forceOpen, extraClass){
       </div>`
     : '';
 
-  const saleEnded = sale.isSoldOut || sale.isCancelled || sale.isFinished;
-
   return `
-    <div class="vendor-card${extraClass ? ' '+extraClass : ''}${forceOpen ? ' open' : ''}${saleEnded ? ' sold-out' : ''}">
+    <div class="vendor-card${extraClass ? ' '+extraClass : ''}${forceOpen ? ' open' : ''}${sale.isInactive ? ' sold-out' : ''}">
       <div class="vendor-card-top">
         <div>
           <p class="vendor-name">${sale.vendor}</p>
@@ -915,9 +930,10 @@ function renderFeaturedSale(){
   const weekEndKey = fmtKey(weekEnd);
 
   // Soonest upcoming sale that falls within the current week (today → Saturday).
-  // Sold-out, cancelled, and finished sales are skipped — no point featuring one.
+  // Inactive sales (sold out, cancelled, rescheduled, finished) are skipped
+  // — no point featuring one.
   const upcomingThisWeek = SALES
-    .filter(s => s.date >= todayKey && s.date <= weekEndKey && !s.isSoldOut && !s.isCancelled && !s.isFinished)
+    .filter(s => s.date >= todayKey && s.date <= weekEndKey && !s.isInactive)
     .sort((a,b) => a.date.localeCompare(b.date) || a.vendor.localeCompare(b.vendor));
 
   if(!upcomingThisWeek.length){
@@ -957,7 +973,10 @@ function renderMonth(){
     const dateObj = new Date(y,m,d);
     const key = fmtKey(dateObj);
     const isToday = key === fmtKey(today);
-    const count = (salesByDate[key]||[]).length;
+    // Only count sales that are still actually happening — sold out,
+    // cancelled, rescheduled, and finished sales don't count toward the
+    // day's badge number.
+    const count = (salesByDate[key]||[]).filter(s => !s.isInactive).length;
     const feasts = feastsForDate(dateObj);
     const feastTitle = feasts.map(f=>f.name).join(', ');
     grid.innerHTML += `
