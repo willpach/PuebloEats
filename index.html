@@ -433,6 +433,37 @@ function parseFormDate(raw){
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
+// Turns the free-text "What time is your food sale?" answer into a
+// sortable minutes-since-midnight value, so the Day/List views can order
+// postings by when the sale actually happens instead of submission order.
+// Looks for an explicit clock time first ("11am", "5:30 PM"), then falls
+// back to loose keywords ("Morning", "Lunch", "Sundown"). Anything that
+// can't be parsed sorts to the end (stable, so original order is kept
+// among unparseable entries).
+function parseSaleTimeMinutes(raw){
+  const str = (raw||'').toLowerCase();
+  const clockMatch = str.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+  if(clockMatch){
+    let hour = parseInt(clockMatch[1],10) % 12;
+    const min = clockMatch[2] ? parseInt(clockMatch[2],10) : 0;
+    if(clockMatch[3] === 'pm') hour += 12;
+    return hour*60 + min;
+  }
+  const keywordMinutes = [
+    [/breakfast|morning/, 8*60],
+    [/brunch/, 10*60],
+    [/noon|lunch/, 12*60],
+    [/afternoon/, 14*60],
+    [/dinner|evening/, 17*60],
+    [/dusk|sundown|sunset/, 19*60],
+    [/night/, 20*60]
+  ];
+  for(const [re, minutes] of keywordMinutes){
+    if(re.test(str)) return minutes;
+  }
+  return Infinity; // unparseable — sort last, keep relative order
+}
+
 function fulfillmentFromAnswer(raw){
   const v = (raw||'').toLowerCase();
   if(v.includes('both') || (v.includes('pick') && v.includes('deliver'))) return 'both';
@@ -501,6 +532,7 @@ function rowToSale(row){
     items: items.length ? items : ['Menu not listed'],
     date: dateKey,
     time: (row['What time is your food sale?']||'').trim(),
+    sortMinutes: parseSaleTimeMinutes(row['What time is your food sale?']||''),
     fulfillment: fulfillmentFromAnswer(row['Pickup only, delivery only, or both?']),
     location: location,
     payment: (row['How can people pay? (mark all that apply)']||'').trim(),
@@ -607,6 +639,9 @@ function renderVillageFilterBar(){
 function reindexAndRender(){
   salesByDate = {};
   getFilteredSales().forEach(s => { (salesByDate[s.date] = salesByDate[s.date] || []).push(s); });
+  Object.keys(salesByDate).forEach(key => {
+    salesByDate[key].sort((a,b) => a.sortMinutes - b.sortMinutes);
+  });
   renderFilterBar();
   renderVillageFilterBar();
   render();
