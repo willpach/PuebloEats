@@ -967,7 +967,10 @@ function renderMonth(){
     const dateObj = new Date(y,m,d);
     const key = fmtKey(dateObj);
     const isToday = key === fmtKey(today);
-    const count = (salesByDate[key]||[]).length;
+    // Badge count reflects active sales only — sold out / cancelled /
+    // finished / rescheduled sales still exist in the day's list (at the
+    // bottom), but shouldn't inflate the number a buyer sees on the calendar.
+    const count = (salesByDate[key]||[]).filter(s => !s.isInactive).length;
     const feasts = feastsForDate(dateObj);
     const feastTitle = feasts.map(f=>f.name).join(', ');
     grid.innerHTML += `
