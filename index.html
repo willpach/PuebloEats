@@ -300,6 +300,18 @@ nav.views button.active{
   font-style:italic;
   font-size:0.85rem;
 }
+.contact-link{
+  display:inline-block;
+  font-size:0.78rem;
+  font-weight:700;
+  color:var(--turquoise);
+  background:#E4EDE9;
+  padding:2px 9px;
+  border-radius:999px;
+  text-decoration:none;
+  margin-left:4px;
+  white-space:nowrap;
+}
 .view{display:none;}
 .view.active{display:block;}
 .thank-you-banner{
@@ -494,6 +506,21 @@ function meaningfulText(raw){
   return v;
 }
 
+// Finds a US phone number inside the free-text contact field and adds
+// tappable Call/Text links next to it, so buyers on mobile can reach the
+// vendor with one tap. Leaves emails, Facebook handles, notes, etc. untouched.
+function linkifyContact(raw){
+  if(!raw) return raw;
+  const phoneRe = /(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
+  return raw.replace(phoneRe, (match) => {
+    const digits = match.replace(/\D/g,'');
+    const tenDigit = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+    if(tenDigit.length !== 10) return match; // not a real phone number, leave as-is
+    const tel = `+1${tenDigit}`;
+    return `${match} <a href="tel:${tel}" class="contact-link">📞 Call</a> <a href="sms:${tel}" class="contact-link">💬 Text</a>`;
+  });
+}
+
 // Fallback category guesser, used ONLY when a vendor didn't check any
 // category boxes on the form — most often because the listing was
 // transcribed from a Facebook post rather than submitted directly.
@@ -599,6 +626,12 @@ function rowToSale(row){
   const updateLower = saleUpdate.toLowerCase();
   const isSoldOut = /sold\s*out/.test(updateLower);
   const isCancelled = /cancel/.test(updateLower);
+  const isFinished = /finish|complete/.test(updateLower);
+  const isRescheduled = /reschedul/.test(updateLower);
+  // Any of these keywords means the sale is no longer something a buyer
+  // should act on right now — used to grey the card out and sink it to
+  // the bottom of its day's list.
+  const isInactive = isSoldOut || isCancelled || isFinished || isRescheduled;
 
   const basedIn = (row['Where are you based?'] || '').trim();
 
@@ -631,7 +664,10 @@ function rowToSale(row){
     isPreorder: isPreorder,
     saleUpdate: saleUpdate,
     isSoldOut: isSoldOut,
-    isCancelled: isCancelled
+    isCancelled: isCancelled,
+    isFinished: isFinished,
+    isRescheduled: isRescheduled,
+    isInactive: isInactive
   };
 }
 
@@ -671,10 +707,10 @@ function getFilteredSales(){
 
 function renderFilterBar(){
   const allCats = new Set();
-  // Only count categories from sales that are still actually available —
-  // a sold-out or cancelled sale shouldn't make its category show up as
-  // something buyers can currently get.
-  SALES.filter(s => !s.isSoldOut && !s.isCancelled).forEach(s => s.categories.forEach(c => allCats.add(c)));
+  // Only count categories from sales that are still actually active —
+  // a sold-out, cancelled, finished, or rescheduled sale shouldn't make
+  // its category show up as something buyers can currently get.
+  SALES.filter(s => !s.isInactive).forEach(s => s.categories.forEach(c => allCats.add(c)));
   const bar = $('#filterBar');
   const label = $('#filterLabel');
   if(allCats.size === 0){ bar.innerHTML = ''; label.style.display = 'none'; return; }
@@ -728,7 +764,10 @@ function reindexAndRender(){
   salesByDate = {};
   getFilteredSales().forEach(s => { (salesByDate[s.date] = salesByDate[s.date] || []).push(s); });
   Object.keys(salesByDate).forEach(key => {
-    salesByDate[key].sort((a,b) => a.sortMinutes - b.sortMinutes);
+    // Active sales first (sorted by time), inactive ones (sold out,
+    // cancelled, finished, rescheduled) pushed to the bottom regardless
+    // of their sale time.
+    salesByDate[key].sort((a,b) => (Number(a.isInactive) - Number(b.isInactive)) || (a.sortMinutes - b.sortMinutes));
   });
   renderFilterBar();
   renderVillageFilterBar();
@@ -771,7 +810,7 @@ function vendorCard(sale, forceOpen, extraClass){
   }).join('');
 
   const contactBlock = sale.contactPublic
-    ? `<div class="detail-row"><span class="detail-label">Contact</span>${sale.contact}</div>`
+    ? `<div class="detail-row"><span class="detail-label">Contact</span>${linkifyContact(sale.contact)}</div>`
     : `<div class="detail-row"><span class="detail-label">Contact</span><span class="contact-note">Kept private by vendor — check back or look for their posted flyer.</span></div>`;
 
   const notesBlock = sale.notes
@@ -794,13 +833,18 @@ function vendorCard(sale, forceOpen, extraClass){
     ? `<span class="chip" style="background:#E4EDE9;color:var(--turquoise);">Recurring</span>`
     : '';
 
-  // Sales-update badge: sold out / cancelled get a strong dark badge (and
-  // mute the whole card, below); any other update gets a lighter "Update"
-  // badge so buyers know to check the details before heading over.
+  // Sales-update badge: sold out / cancelled / finished / rescheduled all
+  // get a strong dark badge (and mute the whole card, below); any other
+  // freeform update gets a lighter "Update" badge so buyers know to check
+  // the details before heading over.
   const updateBadge = sale.isSoldOut
     ? `<span class="chip" style="background:#3A3A34;color:#fff;">Sold Out</span>`
     : sale.isCancelled
     ? `<span class="chip" style="background:#3A3A34;color:#fff;">Cancelled</span>`
+    : sale.isFinished
+    ? `<span class="chip" style="background:#3A3A34;color:#fff;">Finished</span>`
+    : sale.isRescheduled
+    ? `<span class="chip" style="background:#3A3A34;color:#fff;">Rescheduled</span>`
     : sale.saleUpdate
     ? `<span class="chip" style="background:#F5E7C4;color:#8A6A1E;">Update</span>`
     : '';
@@ -828,7 +872,7 @@ function vendorCard(sale, forceOpen, extraClass){
       </div>`
     : '';
 
-  const soldOutOrCancelled = sale.isSoldOut || sale.isCancelled;
+  const soldOutOrCancelled = sale.isInactive;
 
   return `
     <div class="vendor-card${extraClass ? ' '+extraClass : ''}${forceOpen ? ' open' : ''}${soldOutOrCancelled ? ' sold-out' : ''}">
@@ -880,9 +924,10 @@ function renderFeaturedSale(){
   const weekEndKey = fmtKey(weekEnd);
 
   // Soonest upcoming sale that falls within the current week (today → Saturday).
-  // Sold-out and cancelled sales are skipped — no point featuring one.
+  // Inactive sales (sold out, cancelled, finished, rescheduled) are
+  // skipped — no point featuring one.
   const upcomingThisWeek = SALES
-    .filter(s => s.date >= todayKey && s.date <= weekEndKey && !s.isSoldOut && !s.isCancelled)
+    .filter(s => s.date >= todayKey && s.date <= weekEndKey && !s.isInactive)
     .sort((a,b) => a.date.localeCompare(b.date) || a.vendor.localeCompare(b.vendor));
 
   if(!upcomingThisWeek.length){
