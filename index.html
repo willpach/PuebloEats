@@ -671,7 +671,10 @@ function getFilteredSales(){
 
 function renderFilterBar(){
   const allCats = new Set();
-  SALES.forEach(s => s.categories.forEach(c => allCats.add(c)));
+  // Only count categories from sales that are still actually available —
+  // a sold-out or cancelled sale shouldn't make its category show up as
+  // something buyers can currently get.
+  SALES.filter(s => !s.isSoldOut && !s.isCancelled).forEach(s => s.categories.forEach(c => allCats.add(c)));
   const bar = $('#filterBar');
   const label = $('#filterLabel');
   if(allCats.size === 0){ bar.innerHTML = ''; label.style.display = 'none'; return; }
