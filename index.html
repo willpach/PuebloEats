@@ -354,9 +354,9 @@ Prefer not to use the form? Email your sale details to <a href="mailto:KewaEats@
 
 <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink-soft);margin:0 0 6px;">Views</p>
 <nav class="views">
-<button data-view="month" class="active">Month</button>
+<button data-view="month">Month</button>
 <button data-view="week">Week</button>
-<button data-view="day">Day</button>
+<button data-view="day" class="active">Day</button>
 <button data-view="list">List</button>
 </nav>
 
@@ -804,7 +804,7 @@ function rebuildIndexAndRender(status){
 const today = new Date();
 today.setHours(0,0,0,0);
 
-let currentView = 'month';
+let currentView = 'day';
 let cursor = new Date(today); // drives whichever view is active
 let selectedDay = new Date(today);
 
@@ -825,6 +825,14 @@ function vendorCard(sale, forceOpen, extraClass){
     if(m) return `<li><span>${m[1].trim()}</span><span>${m[2]}</span></li>`;
     return `<li><span>${i}</span></li>`;
   }).join('');
+
+  // Once a sale is actually over — sold out, marked finished (by the
+  // vendor or automatically once its day has passed) — there's no reason
+  // to keep showing location, payment, contact, or any other logistics:
+  // all a buyer can still learn from it is what was on offer. Cancelled/
+  // rescheduled sales are left out of this: those aren't "done", and a
+  // buyer may still want the full details to ask about the new time.
+  const isSaleOver = sale.isSoldOut || sale.isFinished || sale.isPastDate;
 
   const contactBlock = sale.contactPublic
     ? `<div class="detail-row"><span class="detail-label">Contact</span>${linkifyContact(sale.contact)}</div>`
@@ -896,31 +904,35 @@ function vendorCard(sale, forceOpen, extraClass){
       <div class="vendor-card-top">
         <div>
           <p class="vendor-name">${sale.vendor}</p>
+          ${isSaleOver ? '' : `
           ${basedInLine}
           <p class="vendor-sub"><span style="color:var(--ink-soft);">Sale time: </span><b>${sale.time}</b></p>
           <p class="vendor-sub" style="margin-top:2px;"><span style="color:var(--ink-soft);">Selling at or from: </span>${sale.location}</p>
           ${openToTags ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;"><span style="font-size:0.7rem;color:var(--ink-soft);align-self:center;">Open to:</span>${openToTags}</div>` : ''}
           ${catTags}
+          `}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
-          ${fulfillmentChip(sale.fulfillment)}
+          ${isSaleOver ? '' : fulfillmentChip(sale.fulfillment)}
           ${updateBadge}
-          ${preorderBadge}
-          ${recurringBadge}
+          ${isSaleOver ? '' : preorderBadge}
+          ${isSaleOver ? '' : recurringBadge}
         </div>
       </div>
       <div class="vendor-details">
-        ${updateBlock}
+        ${isSaleOver ? '' : updateBlock}
         <div class="detail-row">
           <span class="detail-label">Menu</span>
           <ul class="menu-list">${menu}</ul>
         </div>
+        ${isSaleOver ? '' : `
         <div class="detail-row"><span class="detail-label">Location & Instructions</span>${sale.location}</div>
         <div class="detail-row"><span class="detail-label">Payment</span>${sale.payment}</div>
         ${recurringBlock}
         ${preorderBlock}
         ${notesBlock}
         ${contactBlock}
+        `}
       </div>
     </div>`;
 }
