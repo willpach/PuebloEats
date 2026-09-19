@@ -958,10 +958,10 @@ function renderActiveNow(){
     const badges = cats.map(c => `<span class="an-badge">${c}</span>`).join('');
     return `
       <div class="active-now-row" data-date="${s.date}">
-        <span class="an-badges">${badges}</span>
-        <span class="an-time">${formatMinutes(s.sortMinutes) || s.time}</span>
         <span class="an-vendor">${s.vendor}</span>
+        <span class="an-time">${formatMinutes(s.sortMinutes) || s.time}</span>
         <span class="an-village">${s.basedIn || ''}</span>
+        <span class="an-badges">${badges}</span>
       </div>`;
   }).join('');
 
