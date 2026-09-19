@@ -183,21 +183,58 @@ nav.views button.active{
   color:#7A5A16;
   font-weight:600;
 }
-/* FEATURED SALE */
-.featured-wrap{margin-bottom:18px;}
-.featured-label{
+/* HERO */
+@keyframes heroIn{
+  0%{opacity:0;transform:translateY(-10px);}
+  60%{opacity:1;transform:translateY(3px);}
+  100%{opacity:1;transform:translateY(0);}
+}
+header{animation:heroIn 0.7s ease-out both;}
+.hero-illustration{display:block;width:100%;height:auto;margin:8px 0 2px;}
+/* FEAST BANNER */
+.feast-banner{
+  background:var(--clay-soft);
+  color:var(--clay);
+  border-radius:10px;
+  padding:10px 14px;
+  margin:0 0 16px;
+  font-weight:700;
+  font-size:0.9rem;
+}
+/* ACTIVE RIGHT NOW */
+.active-now-wrap{margin:0 0 22px;}
+.active-now-title{
   font-size:0.75rem;
   font-weight:700;
   text-transform:uppercase;
   letter-spacing:0.04em;
-  color:var(--clay);
+  color:var(--ink-soft);
   margin:0 0 8px;
 }
-.featured-card{
-  background:linear-gradient(135deg, var(--clay-soft) 0%, var(--card) 65%);
-  border:2px solid var(--clay);
+.active-now-section{margin-bottom:12px;}
+.active-now-heading{
+  font-size:0.95rem;
+  font-weight:700;
+  color:var(--turquoise);
+  margin:0 0 6px;
 }
-.featured-card .vendor-name{color:var(--clay);}
+.active-now-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 12px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--card);
+  margin-bottom:6px;
+  cursor:pointer;
+}
+.active-now-row:hover{border-color:var(--turquoise);}
+.an-icon{font-size:1rem;line-height:1;}
+.an-time{font-weight:700;font-size:0.85rem;min-width:60px;color:var(--ink);}
+.an-vendor{flex:1;font-weight:600;color:var(--ink);}
+.an-village{font-size:0.8rem;color:var(--ink-soft);}
+.active-now-empty{font-size:0.9rem;color:var(--ink-soft);font-style:italic;margin:0;}
 /* WEEK VIEW */
 .week-grid{
   display:grid;
@@ -338,9 +375,43 @@ nav.views button.active{
 <div class="wrap">
 <header>
 <h1>Pueblo <span>Eats</span></h1>
+<svg class="hero-illustration" viewBox="0 0 720 48" preserveAspectRatio="none" fill="none" aria-hidden="true">
+  <g stroke="var(--clay)" stroke-width="2" stroke-linecap="round" opacity="0.4">
+    <path d="M14 6 C11 3,6 3,5 7 C4 11,6 15,9 18 C14 24,19 30,16 38 C15 42,10 44,6 41"/>
+  </g>
+  <g stroke="var(--ochre)" stroke-width="2" stroke-linecap="round" opacity="0.4">
+    <ellipse cx="118" cy="22" rx="9" ry="19"/>
+    <line x1="111" y1="10" x2="125" y2="10"/>
+    <line x1="110" y1="16" x2="126" y2="16"/>
+    <line x1="109" y1="22" x2="127" y2="22"/>
+    <line x1="110" y1="28" x2="126" y2="28"/>
+    <line x1="111" y1="34" x2="125" y2="34"/>
+  </g>
+  <g stroke="var(--turquoise)" stroke-width="2" stroke-linecap="round" opacity="0.4">
+    <path d="M222 38 Q222 20 240 20 Q258 20 258 38"/>
+    <line x1="218" y1="38" x2="262" y2="38"/>
+    <rect x="234" y="28" width="12" height="10" rx="1.5"/>
+  </g>
+  <g stroke="var(--clay)" stroke-width="2" stroke-linecap="round" opacity="0.4">
+    <path d="M374 6 C371 3,366 3,365 7 C364 11,366 15,369 18 C374 24,379 30,376 38 C375 42,370 44,366 41"/>
+  </g>
+  <g stroke="var(--ochre)" stroke-width="2" stroke-linecap="round" opacity="0.4">
+    <ellipse cx="478" cy="22" rx="9" ry="19"/>
+    <line x1="471" y1="10" x2="485" y2="10"/>
+    <line x1="470" y1="16" x2="486" y2="16"/>
+    <line x1="469" y1="22" x2="487" y2="22"/>
+    <line x1="470" y1="28" x2="486" y2="28"/>
+    <line x1="471" y1="34" x2="485" y2="34"/>
+  </g>
+  <g stroke="var(--turquoise)" stroke-width="2" stroke-linecap="round" opacity="0.4">
+    <path d="M582 38 Q582 20 600 20 Q618 20 618 38"/>
+    <line x1="578" y1="38" x2="622" y2="38"/>
+    <rect x="594" y="28" width="12" height="10" rx="1.5"/>
+  </g>
+</svg>
 <p style="font-size:1.05rem;font-weight:600;color:var(--ink-soft);margin:0;">Food Sales in Kewa Pueblo and surrounding area</p>
 <div style="text-align:left;">
-<p class="tagline">What's there to eat?! Click a day to see!</p>
+<p class="tagline" id="greeting">What's there to eat?!</p>
 <a href="https://forms.gle/rjuh9FAVqehJXCvk7" target="_blank" rel="noopener"
 style="display:inline-block;margin-top:6px;font-size:0.85rem;font-weight:700;color:#fff;background:var(--clay);padding:7px 16px;border-radius:999px;text-decoration:none;">
 Post your food sale →
@@ -351,6 +422,13 @@ Prefer not to use the form? Email your sale details to <a href="mailto:KewaEats@
 </p>
 </div>
 </header>
+
+<div id="feastBanner"></div>
+
+<div class="active-now-wrap">
+<p class="active-now-title">🍽️ Active Right Now</p>
+<div id="activeNow"></div>
+</div>
 
 <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink-soft);margin:0 0 6px;">Views</p>
 <nav class="views">
@@ -378,7 +456,6 @@ Prefer not to use the form? Email your sale details to <a href="mailto:KewaEats@
 </div>
 
 <div class="view active" id="view-month">
-<div id="featuredSale"></div>
 <div class="month-grid" id="monthGrid"></div>
 </div>
 
@@ -493,6 +570,49 @@ function parseSaleTimeMinutes(raw){
     if(re.test(str)) return minutes;
   }
   return Infinity; // unparseable — sort last, keep relative order
+}
+
+// Pulls an explicit END time out of a range like "1pm -5pm" or "11am to
+// 2pm" — the second clock time found in the string. Returns null if
+// there's only one clock time (or none at all), meaning we simply don't
+// know when the sale ends. Used only for the "Active Right Now" list: a
+// sale with no parseable end time stays listed all day rather than being
+// guessed closed — we'd rather show a vendor who might still be selling
+// than hide one based on missing information.
+function parseSaleEndMinutes(raw){
+  const str = (raw||'').toLowerCase();
+  const matches = [...str.matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/g)];
+  if(matches.length < 2) return null;
+  const last = matches[matches.length-1];
+  let hour = parseInt(last[1],10) % 12;
+  const min = last[2] ? parseInt(last[2],10) : 0;
+  if(last[3] === 'pm') hour += 12;
+  return hour*60 + min;
+}
+
+// Turns minutes-since-midnight back into a clean display time ("1:00pm").
+// Returns null for Infinity (unparseable) so the caller can fall back to
+// the sale's raw free-text time instead.
+function formatMinutes(mins){
+  if(!isFinite(mins)) return null;
+  const h24 = Math.floor(mins/60), m = mins%60;
+  const period = h24 < 12 ? 'am' : 'pm';
+  let h12 = h24 % 12; if(h12 === 0) h12 = 12;
+  return `${h12}${m ? ':'+pad(m) : ''}${period}`;
+}
+
+// Small icon per canonical category tag, purely decorative. Falls back to
+// a generic plate for anything a vendor typed that isn't one of the
+// standard checkboxes.
+const CATEGORY_ICONS = {
+  breakfast: '🥞',
+  lunch: '🌮',
+  drinks: '🥤',
+  desserts: '🍰',
+  snacks: '🍿'
+};
+function categoryIcon(cat){
+  return CATEGORY_ICONS[(cat||'').toLowerCase()] || '🍽️';
 }
 
 function fulfillmentFromAnswer(raw){
@@ -667,6 +787,7 @@ function rowToSale(row){
     date: dateKey,
     time: (row['What time is your food sale?']||'').trim(),
     sortMinutes: parseSaleTimeMinutes(row['What time is your food sale?']||''),
+    endMinutes: parseSaleEndMinutes(row['What time is your food sale?']||''),
     fulfillment: fulfillmentFromAnswer(row['Pickup only, delivery only, or both?']),
     location: location,
     payment: (row['How can people pay? (mark all that apply)']||'').trim(),
@@ -798,11 +919,17 @@ function rebuildIndexAndRender(status){
   } else {
     note.textContent = `Couldn't reach the live sheet — showing sample data instead.`;
   }
+  renderActiveNow();
   reindexAndRender();
 }
 
 const today = new Date();
 today.setHours(0,0,0,0);
+
+// Actual current time (unlike `today`, not zeroed to midnight) — used for
+// the time-of-day greeting and for checking whether a sale's listed time
+// window has passed yet.
+const now = new Date();
 
 let currentView = 'day';
 let cursor = new Date(today); // drives whichever view is active
@@ -810,6 +937,91 @@ let selectedDay = new Date(today);
 
 const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const dowShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+// Time-of-day greeting in the hero — small touch, but it signals "this
+// reflects right now" rather than reading like a static printed flyer.
+function renderGreeting(){
+  const el = $('#greeting');
+  if(!el) return;
+  const h = now.getHours();
+  el.textContent = h < 12 ? "Good morning — here's what's cooking"
+    : h < 17 ? "Good afternoon — here's what's cooking"
+    : "Still hungry tonight?";
+}
+
+// Feast-day callout, shown only when today happens to land on one.
+function renderFeastBanner(){
+  const el = $('#feastBanner');
+  if(!el) return;
+  const feasts = feastsForDate(today);
+  el.innerHTML = feasts.length
+    ? `<p class="feast-banner">🌟 Today is ${feasts.map(f=>f.name).join(' & ')} — sales may be extra festive</p>`
+    : '';
+}
+
+// "Active Right Now" — today's sales that are still genuinely happening,
+// grouped by category and led by whichever category has the soonest one.
+// Deliberately independent of the category/village filter chips below;
+// this list always reflects everything live right now.
+function renderActiveNow(){
+  const wrap = $('#activeNow');
+  if(!wrap) return;
+
+  const todayKey = fmtKey(today);
+  const nowMinutes = now.getHours()*60 + now.getMinutes();
+
+  const activeSales = SALES.filter(s =>
+    s.date === todayKey &&
+    !s.isInactive &&
+    (s.endMinutes == null || nowMinutes <= s.endMinutes)
+  );
+
+  if(!activeSales.length){
+    wrap.innerHTML = `<p class="active-now-empty">Nothing selling right now — check what's coming up below.</p>`;
+    return;
+  }
+
+  // Group by category; a sale tagged with more than one (e.g. "Lunch,
+  // Drinks") appears once under each, same as the filter chips treat it.
+  const byCategory = {};
+  activeSales.forEach(s => {
+    const cats = (s.categories && s.categories.length) ? s.categories : ['Other'];
+    cats.forEach(cat => { (byCategory[cat] = byCategory[cat] || []).push(s); });
+  });
+
+  Object.values(byCategory).forEach(list =>
+    list.sort((a,b) => a.sortMinutes - b.sortMinutes || a.vendor.localeCompare(b.vendor))
+  );
+
+  // Soonest-category-first: whichever section's earliest sale comes up
+  // next leads the list.
+  const categoryOrder = Object.keys(byCategory).sort((a,b) =>
+    byCategory[a][0].sortMinutes - byCategory[b][0].sortMinutes
+  );
+
+  wrap.innerHTML = categoryOrder.map(cat => `
+    <div class="active-now-section">
+      <p class="active-now-heading">${categoryIcon(cat)} ${cat}</p>
+      ${byCategory[cat].map(s => `
+        <div class="active-now-row" data-date="${s.date}">
+          <span class="an-icon">${categoryIcon(cat)}</span>
+          <span class="an-time">${formatMinutes(s.sortMinutes) || s.time}</span>
+          <span class="an-vendor">${s.vendor}</span>
+          <span class="an-village">${s.basedIn || ''}</span>
+        </div>`).join('')}
+    </div>`).join('');
+
+  wrap.querySelectorAll('.active-now-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      selectedDay = new Date(row.dataset.date + 'T00:00:00');
+      cursor = new Date(selectedDay);
+      setView('day');
+    });
+  });
+}
+
+renderGreeting();
+renderFeastBanner();
 
 /* ---------- rendering ---------- */
 
@@ -943,38 +1155,7 @@ function attachCardToggles(root){
   });
 }
 
-function renderFeaturedSale(){
-  const wrap = $('#featuredSale');
-  if(!wrap) return;
-
-  const todayKey = fmtKey(today);
-
-  // Today's earliest still-active sale. Inactive sales (sold out,
-  // cancelled, finished — including sales whose day has already passed —
-  // or rescheduled) are skipped — no point featuring one. Nothing shows
-  // at all if there's no active sale today, rather than reaching ahead
-  // into the week.
-  const todaysSales = SALES
-    .filter(s => s.date === todayKey && !s.isInactive)
-    .sort((a,b) => a.sortMinutes - b.sortMinutes || a.vendor.localeCompare(b.vendor));
-
-  if(!todaysSales.length){
-    wrap.innerHTML = '';
-    return;
-  }
-
-  const featured = todaysSales[0];
-
-  wrap.innerHTML = `
-    <div class="featured-wrap">
-      <p class="featured-label">★ Today's Featured Sale</p>
-      ${vendorCard(featured, false, 'featured-card')}
-    </div>`;
-  attachCardToggles(wrap);
-}
-
 function renderMonth(){
-  renderFeaturedSale();
   const y = cursor.getFullYear(), m = cursor.getMonth();
   $('#periodLabel').textContent = `${monthNames[m]} ${y}`;
   const grid = $('#monthGrid');
