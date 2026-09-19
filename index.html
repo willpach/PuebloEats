@@ -149,6 +149,9 @@ nav.views button.active{
 .day-cell:hover{border-color:var(--clay);}
 .day-cell.empty{background:transparent;border-color:transparent;cursor:default;}
 .day-cell.today{border-color:var(--turquoise);border-width:2px;}
+.day-cell.past{background:#EAE6D6;border-color:var(--line);}
+.day-cell.past .day-num{color:var(--ink-soft);opacity:0.65;}
+.day-cell.past .feast-mark{opacity:0.55;}
 .day-num{font-size:0.8rem;font-weight:600;color:var(--ink-soft);}
 .day-cell.today .day-num{color:var(--turquoise);}
 .badge{
@@ -216,6 +219,9 @@ nav.views button.active{
 }
 .week-col-head .num{color:var(--ink);font-size:0.95rem;}
 .week-col.today{border-color:var(--turquoise);border-width:2px;}
+.week-col.past{background:#EAE6D6;border-color:var(--line);}
+.week-col.past .week-col-head{opacity:0.65;}
+.week-col.past .mini-card{opacity:0.7;}
 .mini-card{
   font-size:0.78rem;
   padding:6px 8px;
@@ -973,7 +979,9 @@ function renderMonth(){
   for(let d=1; d<=daysInMonth; d++){
     const dateObj = new Date(y,m,d);
     const key = fmtKey(dateObj);
-    const isToday = key === fmtKey(today);
+    const todayKey = fmtKey(today);
+    const isToday = key === todayKey;
+    const isPast = key < todayKey;
     // Badge count reflects active sales only — sold out / cancelled /
     // finished / rescheduled sales still exist in the day's list (at the
     // bottom), but shouldn't inflate the number a buyer sees on the calendar.
@@ -981,7 +989,7 @@ function renderMonth(){
     const feasts = feastsForDate(dateObj);
     const feastTitle = feasts.map(f=>f.name).join(', ');
     grid.innerHTML += `
-      <div class="day-cell${isToday?' today':''}" data-date="${key}" ${feasts.length?`title="Feast day: ${feastTitle}"`:''}>
+      <div class="day-cell${isToday?' today':''}${isPast?' past':''}" data-date="${key}" ${feasts.length?`title="Feast day: ${feastTitle}"`:''}>
         <span class="day-num">${d}</span>
         ${feasts.length ? `<span class="feast-mark">★</span>` : ''}
         ${count ? `<span class="badge">${count}</span>` : ''}
@@ -1014,7 +1022,9 @@ function renderWeek(){
   for(let i=0;i<7;i++){
     const d = new Date(start); d.setDate(start.getDate()+i);
     const key = fmtKey(d);
-    const isToday = key === fmtKey(today);
+    const todayKey = fmtKey(today);
+    const isToday = key === todayKey;
+    const isPast = key < todayKey;
     const daySales = salesByDate[key] || [];
     const cards = daySales.map(s=>`
       <div class="mini-card" data-date="${key}">
@@ -1023,7 +1033,7 @@ function renderWeek(){
       </div>`).join('');
 
     grid.innerHTML += `
-      <div class="week-col${isToday?' today':''}">
+      <div class="week-col${isToday?' today':''}${isPast?' past':''}">
         <div class="week-col-head">${dowShort[i]}<br><span class="num">${d.getDate()}</span></div>
         ${cards || ''}
       </div>`;
