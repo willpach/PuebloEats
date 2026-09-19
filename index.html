@@ -173,6 +173,9 @@ nav.views button.active{
   color:var(--ochre);
   line-height:1;
 }
+.day-marks{display:flex;gap:4px;}
+.event-mark{font-size:0.7rem;color:var(--turquoise);line-height:1;}
+.day-cell.past .event-mark{opacity:0.55;}
 .feast-banner{
   background:#FBF1DA;
   border:1.5px solid var(--ochre);
@@ -198,16 +201,18 @@ header{animation:heroIn 0.7s ease-out both;}
   margin:0 0 16px;
   color:var(--turquoise);
 }
-/* FEAST BANNER */
-.feast-banner{
-  background:var(--clay-soft);
-  color:var(--clay);
+/* HERO BANNERS (feast days / community events) — distinct name from the
+   plainer .feast-banner used inside the Day view listing, so styling one
+   never bleeds into the other. */
+.hero-banner{
   border-radius:10px;
   padding:10px 14px;
-  margin:0 0 16px;
+  margin:0 0 10px;
   font-weight:700;
   font-size:0.9rem;
 }
+.hero-banner.feast{background:var(--clay-soft);color:var(--clay);}
+.hero-banner.event{background:#E4EDE9;color:var(--turquoise);}
 /* ACTIVE RIGHT NOW */
 .active-now-wrap{margin:0 0 22px;}
 .active-now-title{
@@ -411,6 +416,7 @@ Prefer not to use the form? Email your sale details to <a href="mailto:KewaEats@
 <p class="greeting" id="greeting">What's there to eat?!</p>
 
 <div id="feastBanner"></div>
+<div id="eventBanner"></div>
 
 <div class="active-now-wrap">
 <p class="active-now-title">🍽️ Active Right Now</p>
@@ -518,6 +524,75 @@ const FEAST_DAYS = [
 function feastsForDate(dateObj){
   const m = dateObj.getMonth()+1, d = dateObj.getDate();
   return FEAST_DAYS.filter(f => f.month===m && f.day===d);
+}
+
+/* ---------- COMMUNITY EVENTS ---------- */
+/* A second, separately-maintained sheet (not a public form) for one-off
+   community events — school meets, tournaments, etc. — where vendors
+   might show up to sell. Parsed by column POSITION rather than header
+   name, since this sheet is hand-typed and a typo'd or reworded header
+   shouldn't silently make events stop showing up. Columns, in order:
+   Event Name, Date (M/D/YYYY), Time, Location, Notes. */
+const EVENTS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTepwZ8SJPe-BleJWX8twKNcQ3W-o78BbDtLiwqJbrst7ukU2hvjEaYod4nRx78VowaQUoEHPVuHTQX/pub?gid=0&single=true&output=csv";
+
+// Fallback sample event, used only if the live fetch fails
+const FALLBACK_EVENTS = [
+  { name: "Kewa Kolts XC Meet", date: "2026-09-19", time: "8:00 AM", location: "Wadi Trails", notes: "Vendors are welcomed. Support the teams!" }
+];
+
+let EVENTS = [];
+let eventsByDate = {};
+
+function rowToEvent(cols){
+  const name = (cols[0]||'').trim();
+  const dateKey = parseFormDate(cols[1]||'');
+  if(!name || !dateKey) return null; // skips blank/malformed rows
+  return {
+    name,
+    date: dateKey,
+    time: (cols[2]||'').trim(),
+    location: (cols[3]||'').trim(),
+    notes: (cols[4]||'').trim()
+  };
+}
+
+function eventsForDate(dateObj){
+  return eventsByDate[fmtKey(dateObj)] || [];
+}
+
+function indexEvents(){
+  eventsByDate = {};
+  EVENTS.forEach(e => { (eventsByDate[e.date] = eventsByDate[e.date] || []).push(e); });
+}
+
+function renderEventBanner(){
+  const el = $('#eventBanner');
+  if(!el) return;
+  const events = eventsForDate(today);
+  el.innerHTML = events.map(e =>
+    `<p class="hero-banner event">🏃 Today: ${e.name}${e.location ? ' — '+e.location : ''}${e.time ? ', '+e.time : ''}</p>`
+  ).join('');
+}
+
+function loadEvents(){
+  Papa.parse(EVENTS_CSV_URL, {
+    download: true,
+    header: false,
+    skipEmptyLines: true,
+    complete: function(results){
+      const parsed = results.data.slice(1).map(rowToEvent).filter(Boolean); // slice(1) drops the header row
+      EVENTS = parsed.length ? parsed : FALLBACK_EVENTS;
+      indexEvents();
+      renderEventBanner();
+      render(); // refresh Month markers / Day banner if events arrived after the first paint
+    },
+    error: function(){
+      EVENTS = FALLBACK_EVENTS;
+      indexEvents();
+      renderEventBanner();
+      render();
+    }
+  });
 }
 
 function parseFormDate(raw){
@@ -928,7 +1003,7 @@ function renderFeastBanner(){
   if(!el) return;
   const feasts = feastsForDate(today);
   el.innerHTML = feasts.length
-    ? `<p class="feast-banner">🌟 Today is ${feasts.map(f=>f.name).join(' & ')} — sales may be extra festive</p>`
+    ? `<p class="hero-banner feast">🌟 Today is ${feasts.map(f=>f.name).join(' & ')} — sales may be extra festive</p>`
     : '';
 }
 
@@ -1162,11 +1237,15 @@ function renderMonth(){
     // bottom), but shouldn't inflate the number a buyer sees on the calendar.
     const count = (salesByDate[key]||[]).filter(s => !s.isInactive).length;
     const feasts = feastsForDate(dateObj);
-    const feastTitle = feasts.map(f=>f.name).join(', ');
+    const dayEvents = eventsForDate(dateObj);
+    const titleParts = [];
+    if(feasts.length) titleParts.push(`Feast day: ${feasts.map(f=>f.name).join(', ')}`);
+    if(dayEvents.length) titleParts.push(`Event: ${dayEvents.map(e=>e.name).join(', ')}`);
+    const cellTitle = titleParts.join(' · ');
     grid.innerHTML += `
-      <div class="day-cell${isToday?' today':''}${isPast?' past':''}" data-date="${key}" ${feasts.length?`title="Feast day: ${feastTitle}"`:''}>
+      <div class="day-cell${isToday?' today':''}${isPast?' past':''}" data-date="${key}" ${cellTitle?`title="${cellTitle}"`:''}>
         <span class="day-num">${d}</span>
-        ${feasts.length ? `<span class="feast-mark">★</span>` : ''}
+        ${(feasts.length || dayEvents.length) ? `<span class="day-marks">${feasts.length?'<span class="feast-mark">★</span>':''}${dayEvents.length?'<span class="event-mark">🏃</span>':''}</span>` : ''}
         ${count ? `<span class="badge">${count}</span>` : ''}
       </div>`;
   }
@@ -1230,18 +1309,23 @@ function renderDay(){
 
   const daySales = salesByDate[key] || [];
   const feasts = feastsForDate(selectedDay);
+  const dayEvents = eventsForDate(selectedDay);
   const container = $('#dayListings');
 
   const feastBanner = feasts.length
     ? `<div class="feast-banner">★ Feast day: ${feasts.map(f=>f.name).join(', ')}</div>`
     : '';
 
+  const eventBanners = dayEvents.map(e =>
+    `<div class="feast-banner">🏃 ${e.name}${e.location ? ' — '+e.location : ''}${e.time ? ', '+e.time : ''}${e.notes ? '<br><span style="font-weight:400;">'+e.notes+'</span>' : ''}</div>`
+  ).join('');
+
   if(!daySales.length){
-    container.innerHTML = `${feastBanner}<div class="empty-state">No food sales posted for this day yet.</div>`;
+    container.innerHTML = `${feastBanner}${eventBanners}<div class="empty-state">No food sales posted for this day yet.</div>`;
     return;
   }
 
-  container.innerHTML = feastBanner + daySales.map(s=>vendorCard(s,false)).join('');
+  container.innerHTML = feastBanner + eventBanners + daySales.map(s=>vendorCard(s,false)).join('');
   attachCardToggles(container);
 }
 
@@ -1320,6 +1404,7 @@ $('#todayBtn').addEventListener('click', ()=>{
 
 $('#statusNote').textContent = 'Loading current listings…';
 loadData();
+loadEvents();
 </script>
 </body>
 </html>
