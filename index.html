@@ -190,7 +190,14 @@ nav.views button.active{
   100%{opacity:1;transform:translateY(0);}
 }
 header{animation:heroIn 0.7s ease-out both;}
-.hero-illustration{display:block;width:100%;height:auto;margin:8px 0 2px;}
+.greeting{
+  font-family:'Fraunces',serif;
+  font-weight:700;
+  font-size:1.3rem;
+  letter-spacing:-0.01em;
+  margin:0 0 16px;
+  color:var(--turquoise);
+}
 /* FEAST BANNER */
 .feast-banner{
   background:var(--clay-soft);
@@ -210,13 +217,6 @@ header{animation:heroIn 0.7s ease-out both;}
   letter-spacing:0.04em;
   color:var(--ink-soft);
   margin:0 0 8px;
-}
-.active-now-section{margin-bottom:12px;}
-.active-now-heading{
-  font-size:0.95rem;
-  font-weight:700;
-  color:var(--turquoise);
-  margin:0 0 6px;
 }
 .active-now-row{
   display:flex;
@@ -375,43 +375,8 @@ header{animation:heroIn 0.7s ease-out both;}
 <div class="wrap">
 <header>
 <h1>Pueblo <span>Eats</span></h1>
-<svg class="hero-illustration" viewBox="0 0 720 48" preserveAspectRatio="none" fill="none" aria-hidden="true">
-  <g stroke="var(--clay)" stroke-width="2" stroke-linecap="round" opacity="0.4">
-    <path d="M14 6 C11 3,6 3,5 7 C4 11,6 15,9 18 C14 24,19 30,16 38 C15 42,10 44,6 41"/>
-  </g>
-  <g stroke="var(--ochre)" stroke-width="2" stroke-linecap="round" opacity="0.4">
-    <ellipse cx="118" cy="22" rx="9" ry="19"/>
-    <line x1="111" y1="10" x2="125" y2="10"/>
-    <line x1="110" y1="16" x2="126" y2="16"/>
-    <line x1="109" y1="22" x2="127" y2="22"/>
-    <line x1="110" y1="28" x2="126" y2="28"/>
-    <line x1="111" y1="34" x2="125" y2="34"/>
-  </g>
-  <g stroke="var(--turquoise)" stroke-width="2" stroke-linecap="round" opacity="0.4">
-    <path d="M222 38 Q222 20 240 20 Q258 20 258 38"/>
-    <line x1="218" y1="38" x2="262" y2="38"/>
-    <rect x="234" y="28" width="12" height="10" rx="1.5"/>
-  </g>
-  <g stroke="var(--clay)" stroke-width="2" stroke-linecap="round" opacity="0.4">
-    <path d="M374 6 C371 3,366 3,365 7 C364 11,366 15,369 18 C374 24,379 30,376 38 C375 42,370 44,366 41"/>
-  </g>
-  <g stroke="var(--ochre)" stroke-width="2" stroke-linecap="round" opacity="0.4">
-    <ellipse cx="478" cy="22" rx="9" ry="19"/>
-    <line x1="471" y1="10" x2="485" y2="10"/>
-    <line x1="470" y1="16" x2="486" y2="16"/>
-    <line x1="469" y1="22" x2="487" y2="22"/>
-    <line x1="470" y1="28" x2="486" y2="28"/>
-    <line x1="471" y1="34" x2="485" y2="34"/>
-  </g>
-  <g stroke="var(--turquoise)" stroke-width="2" stroke-linecap="round" opacity="0.4">
-    <path d="M582 38 Q582 20 600 20 Q618 20 618 38"/>
-    <line x1="578" y1="38" x2="622" y2="38"/>
-    <rect x="594" y="28" width="12" height="10" rx="1.5"/>
-  </g>
-</svg>
 <p style="font-size:1.05rem;font-weight:600;color:var(--ink-soft);margin:0;">Food Sales in Kewa Pueblo and surrounding area</p>
 <div style="text-align:left;">
-<p class="tagline" id="greeting">What's there to eat?!</p>
 <a href="https://forms.gle/rjuh9FAVqehJXCvk7" target="_blank" rel="noopener"
 style="display:inline-block;margin-top:6px;font-size:0.85rem;font-weight:700;color:#fff;background:var(--clay);padding:7px 16px;border-radius:999px;text-decoration:none;">
 Post your food sale →
@@ -422,6 +387,8 @@ Prefer not to use the form? Email your sale details to <a href="mailto:KewaEats@
 </p>
 </div>
 </header>
+
+<p class="greeting" id="greeting">What's there to eat?!</p>
 
 <div id="feastBanner"></div>
 
@@ -981,35 +948,25 @@ function renderActiveNow(){
     return;
   }
 
-  // Group by category; a sale tagged with more than one (e.g. "Lunch,
-  // Drinks") appears once under each, same as the filter chips treat it.
-  const byCategory = {};
-  activeSales.forEach(s => {
+  // One row per sale (not grouped by category — with only a vendor or
+  // two active at once, category sections just repeated the same row
+  // over and over). Categories show inline on the row instead, as icons.
+  // Soonest sale first, vendor name as the tiebreaker.
+  const sorted = [...activeSales].sort((a,b) =>
+    a.sortMinutes - b.sortMinutes || a.vendor.localeCompare(b.vendor)
+  );
+
+  wrap.innerHTML = sorted.map(s => {
     const cats = (s.categories && s.categories.length) ? s.categories : ['Other'];
-    cats.forEach(cat => { (byCategory[cat] = byCategory[cat] || []).push(s); });
-  });
-
-  Object.values(byCategory).forEach(list =>
-    list.sort((a,b) => a.sortMinutes - b.sortMinutes || a.vendor.localeCompare(b.vendor))
-  );
-
-  // Soonest-category-first: whichever section's earliest sale comes up
-  // next leads the list.
-  const categoryOrder = Object.keys(byCategory).sort((a,b) =>
-    byCategory[a][0].sortMinutes - byCategory[b][0].sortMinutes
-  );
-
-  wrap.innerHTML = categoryOrder.map(cat => `
-    <div class="active-now-section">
-      <p class="active-now-heading">${categoryIcon(cat)} ${cat}</p>
-      ${byCategory[cat].map(s => `
-        <div class="active-now-row" data-date="${s.date}">
-          <span class="an-icon">${categoryIcon(cat)}</span>
-          <span class="an-time">${formatMinutes(s.sortMinutes) || s.time}</span>
-          <span class="an-vendor">${s.vendor}</span>
-          <span class="an-village">${s.basedIn || ''}</span>
-        </div>`).join('')}
-    </div>`).join('');
+    const icons = cats.map(categoryIcon).join(' ');
+    return `
+      <div class="active-now-row" data-date="${s.date}">
+        <span class="an-icon">${icons}</span>
+        <span class="an-time">${formatMinutes(s.sortMinutes) || s.time}</span>
+        <span class="an-vendor">${s.vendor}</span>
+        <span class="an-village">${s.basedIn || ''}</span>
+      </div>`;
+  }).join('');
 
   wrap.querySelectorAll('.active-now-row').forEach(row=>{
     row.addEventListener('click', ()=>{
