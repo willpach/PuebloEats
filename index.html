@@ -628,10 +628,20 @@ function rowToSale(row){
   const isCancelled = /cancel/.test(updateLower);
   const isFinished = /finish|complete/.test(updateLower);
   const isRescheduled = /reschedul/.test(updateLower);
-  // Any of these keywords means the sale is no longer something a buyer
-  // should act on right now — used to grey the card out and sink it to
-  // the bottom of its day's list.
-  const isInactive = isSoldOut || isCancelled || isFinished || isRescheduled;
+
+  // Automatic end-of-day "finished" state, independent of anything a vendor
+  // types into Sales Update: once a sale's calendar day is in the past, it's
+  // done — no manual step needed. This only looks at the DATE, not the
+  // guessed sale time, since times are loose/optional and some vendors sell
+  // until they run out; a same-day sale stays fully active all day even
+  // after its listed time has passed.
+  const isPastDate = dateKey < fmtKey(today);
+
+  // Any of these means the sale is no longer something a buyer should act
+  // on right now — used to grey the card out and sink it to the bottom of
+  // its day's list. Past-date sales stay visible (greyed) rather than
+  // disappearing, so people can see what they missed.
+  const isInactive = isSoldOut || isCancelled || isFinished || isRescheduled || isPastDate;
 
   const basedIn = (row['Where are you based?'] || '').trim();
 
@@ -667,6 +677,7 @@ function rowToSale(row){
     isCancelled: isCancelled,
     isFinished: isFinished,
     isRescheduled: isRescheduled,
+    isPastDate: isPastDate,
     isInactive: isInactive
   };
 }
@@ -841,7 +852,7 @@ function vendorCard(sale, forceOpen, extraClass){
     ? `<span class="chip" style="background:#3A3A34;color:#fff;">Sold Out</span>`
     : sale.isCancelled
     ? `<span class="chip" style="background:#3A3A34;color:#fff;">Cancelled</span>`
-    : sale.isFinished
+    : (sale.isFinished || sale.isPastDate)
     ? `<span class="chip" style="background:#3A3A34;color:#fff;">Finished</span>`
     : sale.isRescheduled
     ? `<span class="chip" style="background:#3A3A34;color:#fff;">Rescheduled</span>`
@@ -918,31 +929,27 @@ function renderFeaturedSale(){
   const wrap = $('#featuredSale');
   if(!wrap) return;
 
-  const weekStart = startOfWeek(today);
-  const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+6);
   const todayKey = fmtKey(today);
-  const weekEndKey = fmtKey(weekEnd);
 
-  // Soonest upcoming sale that falls within the current week (today → Saturday).
-  // Inactive sales (sold out, cancelled, finished, rescheduled) are
-  // skipped — no point featuring one.
-  const upcomingThisWeek = SALES
-    .filter(s => s.date >= todayKey && s.date <= weekEndKey && !s.isInactive)
-    .sort((a,b) => a.date.localeCompare(b.date) || a.vendor.localeCompare(b.vendor));
+  // Today's earliest still-active sale. Inactive sales (sold out,
+  // cancelled, finished — including sales whose day has already passed —
+  // or rescheduled) are skipped — no point featuring one. Nothing shows
+  // at all if there's no active sale today, rather than reaching ahead
+  // into the week.
+  const todaysSales = SALES
+    .filter(s => s.date === todayKey && !s.isInactive)
+    .sort((a,b) => a.sortMinutes - b.sortMinutes || a.vendor.localeCompare(b.vendor));
 
-  if(!upcomingThisWeek.length){
+  if(!todaysSales.length){
     wrap.innerHTML = '';
     return;
   }
 
-  const featured = upcomingThisWeek[0];
-  const dateObj = new Date(featured.date + 'T00:00:00');
-  const isToday = featured.date === todayKey;
-  const whenLabel = isToday ? 'Today' : `${dowShort[dateObj.getDay()]}, ${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
+  const featured = todaysSales[0];
 
   wrap.innerHTML = `
     <div class="featured-wrap">
-      <p class="featured-label">★ This Week's Featured Sale — ${whenLabel}</p>
+      <p class="featured-label">★ Today's Featured Sale</p>
       ${vendorCard(featured, false, 'featured-card')}
     </div>`;
   attachCardToggles(wrap);
