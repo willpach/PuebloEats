@@ -219,10 +219,6 @@ header{animation:heroIn 0.7s ease-out both;}
   margin:0 0 8px;
 }
 .active-now-row{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:8px 12px;
   border:1px solid var(--line);
   border-radius:8px;
   background:var(--card);
@@ -230,6 +226,14 @@ header{animation:heroIn 0.7s ease-out both;}
   cursor:pointer;
 }
 .active-now-row:hover{border-color:var(--turquoise);}
+.an-row-main{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 12px;
+}
+.an-caret{font-size:0.65rem;color:var(--ink-soft);transition:transform 0.15s ease;}
+.active-now-row.open .an-caret{transform:rotate(180deg);}
 .an-badges{display:flex;flex-wrap:wrap;gap:4px;}
 .an-badge{
   font-size:0.7rem;
@@ -243,6 +247,13 @@ header{animation:heroIn 0.7s ease-out both;}
 .an-time{font-weight:700;font-size:0.85rem;min-width:60px;color:var(--ink);}
 .an-vendor{flex:1;font-weight:600;color:var(--ink);}
 .an-village{font-size:0.8rem;color:var(--ink-soft);}
+/* Quick menu preview — expands in place on click, alongside the normal
+   click-through to that day's full listing below. */
+.an-menu{display:none;padding:0 12px 10px 12px;border-top:1px dashed var(--line);margin-top:4px;}
+.active-now-row.open .an-menu{display:block;padding-top:8px;}
+.an-menu ul{list-style:none;margin:0;padding:0;}
+.an-menu li{display:flex;justify-content:space-between;gap:12px;padding:2px 0;font-size:0.85rem;color:var(--ink-soft);}
+.an-menu li span:last-child{font-weight:600;color:var(--ink);}
 .active-now-empty{font-size:0.9rem;color:var(--ink-soft);font-style:italic;margin:0;}
 /* WEEK VIEW */
 .week-grid{
@@ -958,15 +969,24 @@ function renderActiveNow(){
     const badges = cats.map(c => `<span class="an-badge">${c}</span>`).join('');
     return `
       <div class="active-now-row" data-date="${s.date}">
-        <span class="an-vendor">${s.vendor}</span>
-        <span class="an-time">${formatMinutes(s.sortMinutes) || s.time}</span>
-        <span class="an-village">${s.basedIn || ''}</span>
-        <span class="an-badges">${badges}</span>
+        <div class="an-row-main">
+          <span class="an-vendor">${s.vendor}</span>
+          <span class="an-time">${formatMinutes(s.sortMinutes) || s.time}</span>
+          <span class="an-village">${s.basedIn || ''}</span>
+          <span class="an-badges">${badges}</span>
+          <span class="an-caret">▾</span>
+        </div>
+        <div class="an-menu"><ul>${menuListHTML(s.items)}</ul></div>
       </div>`;
   }).join('');
 
+  // Clicking a row does two things at once: expands a quick menu preview
+  // right there (so something visibly happens immediately), and also
+  // switches the Day view below to that date — same as before, just no
+  // longer the only feedback the click gives.
   wrap.querySelectorAll('.active-now-row').forEach(row=>{
     row.addEventListener('click', ()=>{
+      row.classList.toggle('open');
       selectedDay = new Date(row.dataset.date + 'T00:00:00');
       cursor = new Date(selectedDay);
       setView('day');
@@ -985,12 +1005,20 @@ function fulfillmentChip(f){
   return '<span class="chip both">Pickup or delivery</span>';
 }
 
-function vendorCard(sale, forceOpen, extraClass){
-  const menu = sale.items.map(i => {
+// Turns a sale's raw item lines into <li> markup, splitting off a
+// trailing "$price" onto its own right-aligned column when present.
+// Shared by the full vendor card and the Active Right Now quick-menu
+// preview so both read a sale's menu identically.
+function menuListHTML(items){
+  return items.map(i => {
     const m = i.match(/^(.*?)(\$\d+(\.\d+)?)$/);
     if(m) return `<li><span>${m[1].trim()}</span><span>${m[2]}</span></li>`;
     return `<li><span>${i}</span></li>`;
   }).join('');
+}
+
+function vendorCard(sale, forceOpen, extraClass){
+  const menu = menuListHTML(sale.items);
 
   // Once a sale is actually over — sold out, marked finished (by the
   // vendor or automatically once its day has passed) — there's no reason
