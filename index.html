@@ -213,53 +213,6 @@ header{animation:heroIn 0.7s ease-out both;}
 }
 .hero-banner.feast{background:var(--clay-soft);color:var(--clay);}
 .hero-banner.event{background:#E4EDE9;color:var(--turquoise);}
-/* ACTIVE RIGHT NOW */
-.active-now-wrap{margin:0 0 22px;}
-.active-now-title{
-  font-size:0.75rem;
-  font-weight:700;
-  text-transform:uppercase;
-  letter-spacing:0.04em;
-  color:var(--ink-soft);
-  margin:0 0 8px;
-}
-.active-now-row{
-  border:1px solid var(--line);
-  border-radius:8px;
-  background:var(--card);
-  margin-bottom:6px;
-  cursor:pointer;
-}
-.active-now-row:hover{border-color:var(--turquoise);}
-.an-row-main{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:8px 12px;
-}
-.an-caret{font-size:0.65rem;color:var(--ink-soft);transition:transform 0.15s ease;}
-.active-now-row.open .an-caret{transform:rotate(180deg);}
-.an-badges{display:flex;flex-wrap:wrap;gap:4px;}
-.an-badge{
-  font-size:0.7rem;
-  font-weight:600;
-  color:var(--turquoise);
-  background:#EAF1E8;
-  padding:2px 9px;
-  border-radius:999px;
-  white-space:nowrap;
-}
-.an-time{font-weight:700;font-size:0.85rem;min-width:60px;color:var(--ink);}
-.an-vendor{flex:1;font-weight:600;color:var(--ink);}
-.an-village{font-size:0.8rem;color:var(--ink-soft);}
-/* Quick menu preview — expands in place on click, alongside the normal
-   click-through to that day's full listing below. */
-.an-menu{display:none;padding:0 12px 10px 12px;border-top:1px dashed var(--line);margin-top:4px;}
-.active-now-row.open .an-menu{display:block;padding-top:8px;}
-.an-menu ul{list-style:none;margin:0;padding:0;}
-.an-menu li{display:flex;justify-content:space-between;gap:12px;padding:2px 0;font-size:0.85rem;color:var(--ink-soft);}
-.an-menu li span:last-child{font-weight:600;color:var(--ink);}
-.active-now-empty{font-size:0.9rem;color:var(--ink-soft);font-style:italic;margin:0;}
 /* WEEK VIEW */
 .week-grid{
   display:grid;
@@ -417,11 +370,6 @@ Prefer not to use the form? Email your sale details to <a href="mailto:KewaEats@
 
 <div id="feastBanner"></div>
 <div id="eventBanner"></div>
-
-<div class="active-now-wrap">
-<p class="active-now-title">🍽️ Active Right Now</p>
-<div id="activeNow"></div>
-</div>
 
 <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink-soft);margin:0 0 6px;">Views</p>
 <nav class="views">
@@ -634,24 +582,6 @@ function parseSaleTimeMinutes(raw){
   return Infinity; // unparseable — sort last, keep relative order
 }
 
-// Pulls an explicit END time out of a range like "1pm -5pm" or "11am to
-// 2pm" — the second clock time found in the string. Returns null if
-// there's only one clock time (or none at all), meaning we simply don't
-// know when the sale ends. Used only for the "Active Right Now" list: a
-// sale with no parseable end time stays listed all day rather than being
-// guessed closed — we'd rather show a vendor who might still be selling
-// than hide one based on missing information.
-function parseSaleEndMinutes(raw){
-  const str = (raw||'').toLowerCase();
-  const matches = [...str.matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/g)];
-  if(matches.length < 2) return null;
-  const last = matches[matches.length-1];
-  let hour = parseInt(last[1],10) % 12;
-  const min = last[2] ? parseInt(last[2],10) : 0;
-  if(last[3] === 'pm') hour += 12;
-  return hour*60 + min;
-}
-
 // Turns minutes-since-midnight back into a clean display time ("1:00pm").
 // Returns null for Infinity (unparseable) so the caller can fall back to
 // the sale's raw free-text time instead.
@@ -835,7 +765,6 @@ function rowToSale(row){
     date: dateKey,
     time: (row['What time is your food sale?']||'').trim(),
     sortMinutes: parseSaleTimeMinutes(row['What time is your food sale?']||''),
-    endMinutes: parseSaleEndMinutes(row['What time is your food sale?']||''),
     fulfillment: fulfillmentFromAnswer(row['Pickup only, delivery only, or both?']),
     location: location,
     payment: (row['How can people pay? (mark all that apply)']||'').trim(),
@@ -967,7 +896,6 @@ function rebuildIndexAndRender(status){
   } else {
     note.textContent = `Couldn't reach the live sheet — showing sample data instead.`;
   }
-  renderActiveNow();
   reindexAndRender();
 }
 
@@ -1007,68 +935,6 @@ function renderFeastBanner(){
     : '';
 }
 
-// "Active Right Now" — today's sales that are still genuinely happening,
-// grouped by category and led by whichever category has the soonest one.
-// Deliberately independent of the category/village filter chips below;
-// this list always reflects everything live right now.
-function renderActiveNow(){
-  const wrap = $('#activeNow');
-  if(!wrap) return;
-
-  const todayKey = fmtKey(today);
-  const nowMinutes = now.getHours()*60 + now.getMinutes();
-
-  const activeSales = SALES.filter(s =>
-    s.date === todayKey &&
-    !s.isInactive &&
-    (s.endMinutes == null || nowMinutes <= s.endMinutes)
-  );
-
-  if(!activeSales.length){
-    wrap.innerHTML = `<p class="active-now-empty">Nothing selling right now — check what's coming up below.</p>`;
-    return;
-  }
-
-  // One row per sale (not grouped by category — with only a vendor or
-  // two active at once, category sections just repeated the same row
-  // over and over). Categories show inline on the row as the same pill
-  // badges used in "Selling:" on the vendor cards — plain-text tags read
-  // better here than an emoji-per-category.
-  // Soonest sale first, vendor name as the tiebreaker.
-  const sorted = [...activeSales].sort((a,b) =>
-    a.sortMinutes - b.sortMinutes || a.vendor.localeCompare(b.vendor)
-  );
-
-  wrap.innerHTML = sorted.map(s => {
-    const cats = (s.categories && s.categories.length) ? s.categories : ['Other'];
-    const badges = cats.map(c => `<span class="an-badge">${c}</span>`).join('');
-    return `
-      <div class="active-now-row" data-date="${s.date}">
-        <div class="an-row-main">
-          <span class="an-vendor">${s.vendor}</span>
-          <span class="an-time">${formatMinutes(s.sortMinutes) || s.time}</span>
-          <span class="an-village">${s.basedIn || ''}</span>
-          <span class="an-badges">${badges}</span>
-          <span class="an-caret">▾</span>
-        </div>
-        <div class="an-menu"><ul>${menuListHTML(s.items)}</ul></div>
-      </div>`;
-  }).join('');
-
-  // Clicking a row does two things at once: expands a quick menu preview
-  // right there (so something visibly happens immediately), and also
-  // switches the Day view below to that date — same as before, just no
-  // longer the only feedback the click gives.
-  wrap.querySelectorAll('.active-now-row').forEach(row=>{
-    row.addEventListener('click', ()=>{
-      row.classList.toggle('open');
-      selectedDay = new Date(row.dataset.date + 'T00:00:00');
-      cursor = new Date(selectedDay);
-      setView('day');
-    });
-  });
-}
-
 renderGreeting();
 renderFeastBanner();
 
@@ -1082,8 +948,6 @@ function fulfillmentChip(f){
 
 // Turns a sale's raw item lines into <li> markup, splitting off a
 // trailing "$price" onto its own right-aligned column when present.
-// Shared by the full vendor card and the Active Right Now quick-menu
-// preview so both read a sale's menu identically.
 function menuListHTML(items){
   return items.map(i => {
     const m = i.match(/^(.*?)(\$\d+(\.\d+)?)$/);
