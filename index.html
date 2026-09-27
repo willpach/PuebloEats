@@ -633,15 +633,19 @@ function linkifyContact(raw){
 // Order matters a little (first match per keyword wins), but a menu can
 // still match several categories at once (e.g. burritos + horchata).
 const CATEGORY_KEYWORDS = [
-  [/burrito|bacon|egg|pancake|waffle|breakfast/, 'Breakfast'],
-  [/tea|boba|coffee|juice|soda|lemonade|horchata|atole|\bdrink/, 'Drinks'],
-  [/cake|cookie|pie|pastry|dessert|sweet|churro|empanada|bizcochito/, 'Desserts'],
-  [/chip|snack|chicharr[oó]n|popcorn/, 'Snacks'],
-  [/frybread|fry bread|posole|pozole|stew|chile|tamale|enchilada|plate|lunch|dinner/, 'Lunch']
+  [/\b(burritos?|bacon|eggs?|pancakes?|waffles?|breakfast)\b/, 'Breakfast'],
+  [/\b(teas?|boba|coffee|juices?|sodas?|lemonade|horchata|atole|drinks?)\b/, 'Drinks'],
+  [/\b(cakes?|cupcakes?|cookies?|pies?|pastry|pastries|desserts?|sweets?|churros?|empanadas?|empanaditas?|bizcochitos?|brownies?)\b/, 'Desserts'],
+  [/\b(chips?|snacks?|chicharr[oó]n(es)?|popcorn)\b/, 'Snacks'],
+  [/\b(frybread|fry bread|posole|pozole|stews?|chile|tamales?|enchiladas?|plates?|lunch|dinner)\b/, 'Lunch']
 ];
 
+// Savory dishes that happen to be called "pie" — stripped out before
+// matching so a Frito pie or pot pie doesn't get tagged as a dessert.
+const SAVORY_PIES = /\b(frito|walking|pot|meat|chicken|beef|shepherd'?s|cottage|tamale|pizza)[\s-]+pies?\b/g;
+
 function guessCategoriesFromItems(items){
-  const text = items.join(' ').toLowerCase();
+  const text = items.join(' ').toLowerCase().replace(SAVORY_PIES, ' ');
   return CATEGORY_KEYWORDS.filter(([re]) => re.test(text)).map(([,cat]) => cat);
 }
 
